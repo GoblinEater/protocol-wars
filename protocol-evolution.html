@@ -1,0 +1,556 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Protocol Evolution — Goblin Eaters Cyber Cavern</title>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#0b0e14;--surface:#111520;--border:#1e2636;--border2:#263040;
+  --text:#c8d4e8;--dim:#6b7f9e;--faint:#3a4a60;
+  --ip-col:#b57aff;--ip-dim:#2d1a4a;--panel-h:180px;
+}
+*{margin:0;padding:0;box-sizing:border-box;}
+body{font-family:'JetBrains Mono',monospace;background:var(--bg);color:var(--text);height:100vh;overflow:hidden;display:flex;flex-direction:column;}
+.header{height:48px;flex-shrink:0;padding:0 1.5rem;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;background:var(--surface);}
+.header-title{font-family:'Syne',sans-serif;font-size:.9rem;font-weight:800;}
+.header-sub{font-size:.58rem;color:var(--dim);margin-top:.1rem;letter-spacing:.06em;text-transform:uppercase;}
+.legend{display:flex;gap:1.2rem;align-items:center;}
+.leg-item{display:flex;align-items:center;gap:.35rem;font-size:.65rem;color:var(--dim);}
+.leg-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;}
+.canvas-wrap{flex:1;position:relative;overflow:hidden;}
+canvas{display:block;width:100%;height:100%;}
+.panel{height:var(--panel-h);flex-shrink:0;border-top:1px solid var(--border);background:var(--surface);display:flex;}
+.step-info{flex:1;padding:.8rem 1.2rem;display:flex;flex-direction:column;gap:.35rem;overflow:hidden;}
+.step-phase{font-size:.62rem;text-transform:uppercase;letter-spacing:.1em;color:var(--dim);}
+.step-title{font-family:'Syne',sans-serif;font-size:1.05rem;font-weight:700;line-height:1.2;}
+.step-desc{font-size:.76rem;color:var(--dim);line-height:1.7;flex:1;overflow:hidden;}
+.nav-col{width:220px;flex-shrink:0;border-left:1px solid var(--border);display:flex;flex-direction:column;padding:.8rem;gap:.5rem;justify-content:center;}
+.step-dots{display:flex;gap:.2rem;justify-content:center;margin-bottom:.2rem;}
+.sdot{flex:1;height:3px;border-radius:2px;background:var(--faint);transition:background .3s;}
+.sdot.done{background:var(--ip-col);}
+.sdot.current{background:#ffb340;}
+.step-counter{font-size:.68rem;color:var(--dim);text-align:center;}
+.nav-btns{display:flex;gap:.4rem;}
+.nbtn{flex:1;font-family:'JetBrains Mono',monospace;font-size:.75rem;padding:.5rem;border:1px solid var(--border2);border-radius:4px;background:var(--bg);color:var(--text);cursor:pointer;transition:all .18s;text-align:center;}
+.nbtn:hover{border-color:var(--dim);color:var(--ip-col);}
+.nbtn:disabled{opacity:.25;cursor:not-allowed;}
+.nbtn.primary{background:var(--ip-dim);border-color:var(--ip-col);color:var(--ip-col);}
+.nbtn.primary:hover{background:rgba(181,122,255,.2);}
+.auto-btn{font-family:'JetBrains Mono',monospace;font-size:.7rem;padding:.38rem;border:1px solid var(--border2);border-radius:4px;background:transparent;color:var(--dim);cursor:pointer;transition:all .18s;width:100%;}
+.auto-btn:hover{color:var(--text);border-color:var(--dim);}
+.auto-btn.running{color:#ffb340;border-color:#ffb340;}
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div>
+    <div class="header-title">The Age of Abundance — Protocol Evolution</div>
+    <div class="header-sub">Week 6 · Protocols That Refused to Die, Part 1 · Goblin Eaters Cyber Cavern</div>
+  </div>
+  <div class="legend">
+    <div class="leg-item"><div class="leg-dot" style="background:#ffb340"></div>IPX/SPX</div>
+    <div class="leg-item"><div class="leg-dot" style="background:#4a9eff"></div>DECnet</div>
+    <div class="leg-item"><div class="leg-dot" style="background:#3ecf8e"></div>AppleTalk</div>
+    <div class="leg-item"><div class="leg-dot" style="background:#b57aff"></div>IP</div>
+    <div class="leg-item"><div class="leg-dot" style="background:#c8d4e8"></div>Router</div>
+  </div>
+</div>
+
+<div class="canvas-wrap"><canvas id="c"></canvas></div>
+
+<div class="panel">
+  <div class="step-info">
+    <div class="step-phase" id="sPhase"></div>
+    <div class="step-title"  id="sTitle"></div>
+    <div class="step-desc"   id="sDesc"></div>
+  </div>
+  <div class="nav-col">
+    <div class="step-dots"    id="stepDots"></div>
+    <div class="step-counter" id="stepCounter"></div>
+    <div class="nav-btns">
+      <button class="nbtn"         id="btnPrev" onclick="prevStep()" disabled>← Back</button>
+      <button class="nbtn primary" id="btnNext" onclick="nextStep()">Next →</button>
+    </div>
+    <button class="auto-btn" id="btnAuto" onclick="toggleAuto()">▶ Auto Play</button>
+  </div>
+</div>
+
+<script>
+// ── SECTORS ───────────────────────────────────────────────────────────────────
+const SECTORS = [
+  { id:'ent',  rx:.02, ry:.04, rw:.30, rh:.44, label:'Enterprise',          col:'rgba(255,179,64,.04)'  },
+  { id:'gov',  rx:.34, ry:.04, rw:.30, rh:.44, label:'Government & Eng.',   col:'rgba(74,158,255,.04)'  },
+  { id:'cre',  rx:.68, ry:.04, rw:.30, rh:.44, label:'Creative & Academic', col:'rgba(62,207,142,.04)'  },
+  { id:'ind',  rx:.02, ry:.52, rw:.30, rh:.44, label:'Industrial',          col:'rgba(255,179,64,.04)'  },
+  { id:'home', rx:.34, ry:.52, rw:.30, rh:.44, label:'Home & Small Biz',    col:'rgba(181,122,255,.04)' },
+  { id:'hc',   rx:.68, ry:.52, rw:.30, rh:.44, label:'Healthcare & Spec.',  col:'rgba(74,158,255,.04)'  },
+];
+
+// ── PROTOCOL NODE POOLS ───────────────────────────────────────────────────────
+// Each protocol has fixed pre-seeded positions within its sector(s).
+// IP has a pool per sector so it fills vacated territory organically.
+const PROTO_DEFS = {
+  // Proprietary stacks — each in their home sector
+  ipx:      { col:'#ffb340', label:'IPX/SPX',          sector:{ rx:.03, ry:.06, rw:.28, rh:.40 }, count:16 },
+  dec:      { col:'#4a9eff', label:'DECnet',            sector:{ rx:.35, ry:.06, rw:.28, rh:.40 }, count:14 },
+  atalk:    { col:'#3ecf8e', label:'AppleTalk',         sector:{ rx:.69, ry:.06, rw:.28, rh:.40 }, count:14 },
+  // Industrial IPX holdouts — separate fixed positions in Industrial sector
+  ipx_ind:  { col:'#ffb340', label:'IPX — Industrial',  sector:{ rx:.03, ry:.54, rw:.28, rh:.40 }, count:8  },
+  // Healthcare — AppleTalk in admin offices
+  atalk_hc: { col:'#3ecf8e', label:'AppleTalk — HC',   sector:{ rx:.69, ry:.54, rw:.20, rh:.20 }, count:6  },
+  // Healthcare — clinical device protocols
+  ipx_hc:   { col:'#ffb340', label:'Clinical Devices',  sector:{ rx:.69, ry:.72, rw:.28, rh:.22 }, count:6  },
+  // IP per sector — fills as proprietary retreats
+  ip_ent:   { col:'#b57aff', label:'IP',                sector:{ rx:.03, ry:.06, rw:.28, rh:.40 }, count:16 },
+  ip_gov:   { col:'#b57aff', label:'IP',                sector:{ rx:.35, ry:.06, rw:.28, rh:.40 }, count:14 },
+  ip_cre:   { col:'#b57aff', label:'IP',                sector:{ rx:.69, ry:.06, rw:.28, rh:.40 }, count:14 },
+  ip_ind:   { col:'#b57aff', label:'IP',                sector:{ rx:.03, ry:.54, rw:.28, rh:.40 }, count:10 },
+  ip_home:  { col:'#b57aff', label:'IP',                sector:{ rx:.35, ry:.54, rw:.28, rh:.40 }, count:12 },
+  ip_hc:    { col:'#b57aff', label:'IP',                sector:{ rx:.69, ry:.54, rw:.28, rh:.40 }, count:12 },
+};
+
+// ── NODE SEEDING ──────────────────────────────────────────────────────────────
+const NODES = {};
+
+function seededRand(seed) {
+  let s = seed;
+  return function() {
+    s = (s * 1664525 + 1013904223) & 0xffffffff;
+    return (s >>> 0) / 0xffffffff;
+  };
+}
+
+function seedNodes() {
+  Object.keys(PROTO_DEFS).forEach(key => {
+    const def  = PROTO_DEFS[key];
+    const rand = seededRand(key.split('').reduce((a,c)=>a+c.charCodeAt(0),0)*31);
+    const pad  = .025;
+    NODES[key] = [];
+    for (let i=0; i<def.count; i++) {
+      const s = def.sector;
+      NODES[key].push({
+        rx:    s.rx + pad + rand() * (s.rw - pad*2),
+        ry:    s.ry + pad + rand() * (s.rh - pad*2),
+        r:     .014 + rand() * .016,
+        phase: rand() * Math.PI * 2,
+      });
+    }
+  });
+}
+
+// ── STEP DATA ─────────────────────────────────────────────────────────────────
+// visible: how many nodes to show (first N)
+// opacity: base opacity
+// dim: true = reduced opacity, dashed ring — holdout/stray treatment
+const STEPS = [
+  {
+    phase:'Phase 1a — The Guilds Emerge',
+    title:'The Guilds Emerge',
+    desc:'Each vendor builds their own world. IPX/SPX dominates enterprise file and print. DECnet takes hold in government and engineering. AppleTalk finds its home in creative studios, universities, and medical offices. The market is growing. There is room for everyone.',
+    blobs:{
+      ipx:      { visible:4,  opacity:1   },
+      dec:      { visible:3,  opacity:1   },
+      atalk:    { visible:4,  opacity:1   },
+      atalk_hc: { visible:2,  opacity:.8  },
+    },
+    routers:[], friction:false,
+  },
+  {
+    phase:'Phase 1b — The Age of Abundance',
+    title:'The Age of Abundance',
+    desc:'The guilds grow. IPX/SPX spreads across enterprise — and into early industrial control systems. DECnet expands into manufacturing and specialist government. AppleTalk blooms in publishing, design studios, campuses, and medical offices. Clinical device networks take shape in hospitals. Each succeeding. None watching the horizon.',
+    blobs:{
+      ipx:      { visible:16, opacity:1   },
+      dec:      { visible:14, opacity:1   },
+      atalk:    { visible:14, opacity:1   },
+      atalk_hc: { visible:5,  opacity:.9  },
+      ipx_ind:  { visible:5,  opacity:.85 },
+      ipx_hc:   { visible:3,  opacity:.8  },
+    },
+    routers:[], friction:false,
+  },
+  {
+    phase:'Phase 2 — The Friction',
+    title:'Islands That Cannot Speak',
+    desc:'Departments want to share. Organizations grow. The Novell network in finance cannot talk to the DECnet installation in engineering. The AppleTalk cluster in design — and the medical office — is invisible to both. Clinical devices run on protocols the administrative network cannot reach. Each guild excellent within its walls. The walls are the problem.',
+    blobs:{
+      ipx:      { visible:16, opacity:1   },
+      dec:      { visible:14, opacity:1   },
+      atalk:    { visible:14, opacity:1   },
+      atalk_hc: { visible:5,  opacity:.9  },
+      ipx_ind:  { visible:5,  opacity:.85 },
+      ipx_hc:   { visible:3,  opacity:.8  },
+    },
+    routers:[], friction:true,
+  },
+  {
+    phase:'Phase 3 — The Interpreter',
+    title:'The Interpreter Arrives',
+    desc:'Sandy Lerner and Len Bosack build a device that can stand between incompatible networks and make each one intelligible to the other. The first multi-protocol router. It holds dual citizenship — a native node on every network it touches. The guild walls now have doors.',
+    blobs:{
+      ipx:      { visible:16, opacity:1   },
+      dec:      { visible:14, opacity:1   },
+      atalk:    { visible:14, opacity:1   },
+      atalk_hc: { visible:5,  opacity:.9  },
+      ipx_ind:  { visible:5,  opacity:.85 },
+      ipx_hc:   { visible:3,  opacity:.8  },
+    },
+    routers:[
+      { rx:.34, ry:.27 },
+      { rx:.68, ry:.27 },
+    ],
+    friction:false,
+  },
+  {
+    phase:'Phase 4a — IP Spreads',
+    title:'The Common Road',
+    desc:'IP begins appearing in every sector — not replacing, but joining. Administrative healthcare migrates quickly. But clinical equipment is different. FDA certification freezes device software at specific versions. IP reaches the office. The ward is another matter.',
+    blobs:{
+      ipx:      { visible:9,  opacity:.7  },
+      dec:      { visible:7,  opacity:.7  },
+      atalk:    { visible:8,  opacity:.7  },
+      atalk_hc: { visible:3,  opacity:.55 },
+      ipx_ind:  { visible:5,  opacity:.85 },
+      ipx_hc:   { visible:3,  opacity:.8  },
+      ip_ent:   { visible:7,  opacity:.75 },
+      ip_gov:   { visible:7,  opacity:.75 },
+      ip_cre:   { visible:6,  opacity:.75 },
+      ip_ind:   { visible:4,  opacity:.65 },
+      ip_home:  { visible:9,  opacity:.9  },
+      ip_hc:    { visible:5,  opacity:.7  },
+    },
+    routers:[
+      { rx:.34, ry:.27 },
+      { rx:.68, ry:.27 },
+      { rx:.50, ry:.44 },
+    ],
+    friction:false,
+  },
+  {
+    phase:'Phase 4b — Inevitability',
+    title:'Not By Conquest. By Inevitability.',
+    desc:'IP fills the territory the proprietary stacks vacate. Sector by sector. The multi-protocol specialists become expensive relics. Administrative healthcare fully absorbed. But Industrial and clinical Healthcare hold — the migration calculus never resolved in IP\'s favor there. The guild doesn\'t die in those places. It becomes a province.',
+    blobs:{
+      ipx:      { visible:3,  opacity:.35, dim:true },
+      dec:      { visible:2,  opacity:.35, dim:true },
+      atalk:    { visible:2,  opacity:.35, dim:true },
+      atalk_hc: { visible:1,  opacity:.25, dim:true },
+      ipx_ind:  { visible:5,  opacity:.8  },
+      ipx_hc:   { visible:3,  opacity:.8  },
+      ip_ent:   { visible:16, opacity:.9  },
+      ip_gov:   { visible:14, opacity:.9  },
+      ip_cre:   { visible:14, opacity:.9  },
+      ip_ind:   { visible:6,  opacity:.75 },
+      ip_home:  { visible:12, opacity:.95 },
+      ip_hc:    { visible:10, opacity:.85 },
+    },
+    routers:[
+      { rx:.34, ry:.27 },
+      { rx:.68, ry:.27 },
+      { rx:.50, ry:.44 },
+      { rx:.28, ry:.64 },
+      { rx:.72, ry:.64 },
+    ],
+    friction:false,
+  },
+  {
+    phase:'Phase 5 — The Provinces',
+    title:'Holdouts and Strays',
+    desc:'IP permeates every sector. But isolated nodes remain — industrial control systems, frozen government installations, clinical device networks that cannot be recertified. IP surrounds them. It does not replace them. The guild never fully dissolved. It just moved to provinces and enclaves — small enough to be forgotten, invisible enough to be dangerous. Defensive blind spots hiding in plain sight.',
+    blobs:{
+      ipx:      { visible:2,  opacity:.18, dim:true },
+      ipx_ind:  { visible:4,  opacity:.42, dim:true },
+      dec:      { visible:2,  opacity:.2,  dim:true },
+      atalk:    { visible:1,  opacity:.18, dim:true },
+      ipx_hc:   { visible:3,  opacity:.42, dim:true },
+      ip_ent:   { visible:16, opacity:.92 },
+      ip_gov:   { visible:14, opacity:.92 },
+      ip_cre:   { visible:14, opacity:.92 },
+      ip_ind:   { visible:10, opacity:.82 },
+      ip_home:  { visible:12, opacity:.95 },
+      ip_hc:    { visible:12, opacity:.88 },
+    },
+    routers:[
+      { rx:.34, ry:.27 },
+      { rx:.68, ry:.27 },
+      { rx:.50, ry:.44 },
+      { rx:.28, ry:.64 },
+      { rx:.72, ry:.64 },
+    ],
+    friction:false, sectorLabel:true,
+  },
+];
+
+// ── CANVAS ────────────────────────────────────────────────────────────────────
+const canvas = document.getElementById('c');
+const ctx    = canvas.getContext('2d');
+
+function resize() {
+  canvas.width  = canvas.parentElement.clientWidth;
+  canvas.height = canvas.parentElement.clientHeight;
+}
+function gx(rx){ return rx*canvas.width;  }
+function gy(ry){ return ry*canvas.height; }
+function gr(r) { return r *Math.min(canvas.width,canvas.height); }
+
+// ── PER-NODE ANIMATED OPACITY ─────────────────────────────────────────────────
+const nodeOp  = {}; // current
+const nodeOp_ = {}; // target
+
+const FADE_IN  = 0.022;
+const FADE_OUT = 0.010; // slower fade-out — some nodes linger longer than others
+
+function initOpacities() {
+  Object.keys(PROTO_DEFS).forEach(key => {
+    for (let i=0;i<PROTO_DEFS[key].count;i++) {
+      const nk=`${key}_${i}`;
+      nodeOp[nk]=0; nodeOp_[nk]=0;
+    }
+  });
+}
+
+function setTargets(stepIdx) {
+  const step = STEPS[stepIdx];
+  Object.keys(PROTO_DEFS).forEach(key => {
+    const count = PROTO_DEFS[key].count;
+    const blob  = step.blobs[key];
+    for (let i=0;i<count;i++) {
+      const nk=`${key}_${i}`;
+      nodeOp_[nk] = (blob && i < blob.visible) ? blob.opacity : 0;
+    }
+  });
+}
+
+function tickOpacities() {
+  Object.keys(nodeOp_).forEach(nk => {
+    const tgt = nodeOp_[nk];
+    const cur = nodeOp[nk];
+    const diff = tgt - cur;
+    if (Math.abs(diff) < .002) { nodeOp[nk]=tgt; return; }
+    // Nodes don't all fade at exactly the same rate — add tiny per-node variance
+    const speed = diff > 0 ? FADE_IN : FADE_OUT;
+    nodeOp[nk] = cur + Math.sign(diff)*speed;
+  });
+}
+
+// ── DRAW ──────────────────────────────────────────────────────────────────────
+let nowT = 0;
+
+function drawGrid() {
+  ctx.save();
+  ctx.strokeStyle='#0d1219'; ctx.lineWidth=1;
+  for(let x=0;x<canvas.width; x+=40){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,canvas.height);ctx.stroke();}
+  for(let y=0;y<canvas.height;y+=40){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(canvas.width,y); ctx.stroke();}
+  ctx.restore();
+}
+
+function drawSectors() {
+  SECTORS.forEach(s=>{
+    const x=gx(s.rx),y=gy(s.ry),w=gx(s.rw),h=gy(s.rh);
+    ctx.save();
+    ctx.fillStyle=s.col; ctx.fillRect(x,y,w,h);
+    ctx.strokeStyle='rgba(255,255,255,.04)'; ctx.lineWidth=1; ctx.strokeRect(x,y,w,h);
+    ctx.fillStyle='rgba(255,255,255,.13)';
+    ctx.font=`500 ${Math.max(9,canvas.width*.008)}px 'JetBrains Mono'`;
+    ctx.textAlign='left'; ctx.fillText(s.label.toUpperCase(),x+8,y+14);
+    ctx.restore();
+  });
+}
+
+function isDim(key, i) {
+  const step = STEPS[currentStep];
+  const blob = step.blobs[key];
+  return blob && blob.dim === true && i < (blob.visible||0);
+}
+
+function drawNode(key, i) {
+  const nk=`${key}_${i}`;
+  const op=nodeOp[nk];
+  if (op<=.005) return;
+
+  const def  = PROTO_DEFS[key];
+  const node = NODES[key][i];
+  const dim  = isDim(key, i);
+
+  const x=gx(node.rx), y=gy(node.ry), r=gr(node.r);
+  const pulse = dim
+    ? .5 + .18*Math.sin(nowT*1.2+node.phase)
+    : .80 + .20*Math.sin(nowT*1.9+node.phase);
+
+  ctx.save();
+  ctx.globalAlpha = op*pulse;
+
+  // Glow
+  const grd=ctx.createRadialGradient(x,y,0,x,y,r*2.2);
+  grd.addColorStop(0, def.col+'44');
+  grd.addColorStop(1,'transparent');
+  ctx.fillStyle=grd;
+  ctx.beginPath(); ctx.arc(x,y,r*2.2,0,Math.PI*2); ctx.fill();
+
+  // Core
+  ctx.globalAlpha=op*pulse;
+  ctx.shadowColor=def.col;
+  ctx.shadowBlur = dim ? 4 : 14;
+  ctx.fillStyle  = dim ? def.col+'44' : def.col+'cc';
+  ctx.beginPath(); ctx.arc(x,y,r,0,Math.PI*2); ctx.fill();
+
+  // Dim dashed ring — holdout/stray indicator
+  if (dim) {
+    ctx.globalAlpha=op*.4*pulse;
+    ctx.strokeStyle=def.col;
+    ctx.lineWidth=1;
+    ctx.setLineDash([3,5]);
+    ctx.beginPath(); ctx.arc(x,y,r*1.6,0,Math.PI*2); ctx.stroke();
+  }
+
+  ctx.restore();
+}
+
+function drawFriction() {
+  [{rx:.34,ry:.27},{rx:.68,ry:.27}].forEach(p=>{
+    const x=gx(p.rx),y=gy(p.ry),s=gr(.022);
+    const pulse=.5+.5*Math.sin(nowT*3);
+    ctx.save();
+    ctx.globalAlpha=.7*pulse;
+    ctx.strokeStyle='#ff4d6a'; ctx.lineWidth=2;
+    ctx.shadowColor='#ff4d6a'; ctx.shadowBlur=8;
+    ctx.beginPath(); ctx.moveTo(x-s,y-s); ctx.lineTo(x+s,y+s); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(x+s,y-s); ctx.lineTo(x-s,y+s); ctx.stroke();
+    ctx.beginPath(); ctx.arc(x,y,s*1.6,0,Math.PI*2); ctx.stroke();
+    ctx.restore();
+  });
+}
+
+function drawRouter(rx,ry) {
+  const x=gx(rx),y=gy(ry),s=gr(.022);
+  ctx.save();
+  ctx.shadowColor='#c8d4e8'; ctx.shadowBlur=10;
+  ctx.strokeStyle='#c8d4e8'; ctx.fillStyle='#13182a'; ctx.lineWidth=1.5;
+  ctx.beginPath(); ctx.roundRect(x-s,y-s*.6,s*2,s*1.2,3); ctx.fill(); ctx.stroke();
+  for(let i=0;i<3;i++){
+    ctx.fillStyle='#c8d4e8'; ctx.globalAlpha=.7;
+    ctx.beginPath(); ctx.arc(x-s*.5+i*s*.5,y+s*.15,s*.12,0,Math.PI*2); ctx.fill();
+  }
+  ctx.globalAlpha=.5; ctx.fillStyle='#c8d4e8';
+  ctx.font=`500 ${Math.max(7,s*.6)}px 'JetBrains Mono'`;
+  ctx.textAlign='center'; ctx.fillText('RTR',x,y-s*.7);
+  ctx.restore();
+}
+
+function drawHoldoutLabels() {
+  // Labels for dim holdout clusters in final step
+  const targets=[
+    {key:'ipx',     label:'IPX/SPX'},
+    {key:'ipx_ind', label:'IPX — Industrial'},
+    {key:'ipx_hc',  label:'Clinical Devices'},
+    {key:'dec',     label:'DECnet'},
+    {key:'atalk',   label:'AppleTalk'},
+  ];
+  targets.forEach(({key,label})=>{
+    const def=PROTO_DEFS[key];
+    const nodes=NODES[key];
+    if(!nodes||!nodes.length) return;
+    let sumX=0,minY=1,count=0;
+    nodes.forEach((n,i)=>{
+      const op=nodeOp[`${key}_${i}`];
+      if(op>.05){sumX+=n.rx; minY=Math.min(minY,n.ry-n.r*2); count++;}
+    });
+    if(!count) return;
+    const x=gx(sumX/count), y=gy(minY)-gr(.03);
+    const pulse=.4+.3*Math.sin(nowT*1.1);
+    ctx.save();
+    ctx.globalAlpha=pulse;
+    ctx.fillStyle=def.col;
+    ctx.font=`400 ${Math.max(8,canvas.width*.0075)}px 'JetBrains Mono'`;
+    ctx.textAlign='center'; ctx.fillText(label,x,y);
+    ctx.restore();
+  });
+}
+
+function draw() {
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  drawGrid();
+  drawSectors();
+
+  const step=STEPS[currentStep];
+
+  // IP nodes first — they sit behind everything else
+  ['ip_ent','ip_gov','ip_cre','ip_ind','ip_home','ip_hc'].forEach(key=>{
+    for(let i=0;i<PROTO_DEFS[key].count;i++) drawNode(key,i);
+  });
+
+  // Proprietary nodes on top
+  ['ipx','dec','atalk','atalk_hc','ipx_ind','ipx_hc'].forEach(key=>{
+    for(let i=0;i<PROTO_DEFS[key].count;i++) drawNode(key,i);
+  });
+
+  if(step.friction)    drawFriction();
+  if(step.routers)     step.routers.forEach(r=>drawRouter(r.rx,r.ry));
+  if(step.sectorLabel) drawHoldoutLabels();
+}
+
+// ── LOOP ──────────────────────────────────────────────────────────────────────
+let currentStep=0;
+let autoTimer=null;
+
+function loop(ts) {
+  nowT=ts*.001;
+  tickOpacities();
+  draw();
+  requestAnimationFrame(loop);
+}
+
+// ── NAVIGATION ────────────────────────────────────────────────────────────────
+function goToStep(idx) {
+  currentStep=idx;
+  setTargets(idx);
+  updateUI();
+}
+function nextStep(){if(currentStep<STEPS.length-1) goToStep(currentStep+1);}
+function prevStep(){if(currentStep>0)              goToStep(currentStep-1);}
+
+function updateUI() {
+  const s=STEPS[currentStep];
+  document.getElementById('sPhase').textContent    =s.phase;
+  document.getElementById('sTitle').textContent    =s.title;
+  document.getElementById('sDesc').textContent     =s.desc;
+  document.getElementById('stepCounter').textContent=`Step ${currentStep+1} of ${STEPS.length}`;
+  document.getElementById('btnPrev').disabled=currentStep===0;
+  document.getElementById('btnNext').disabled=currentStep===STEPS.length-1;
+  const bar=document.getElementById('stepDots');
+  bar.innerHTML=STEPS.map((_,i)=>{
+    let c='sdot';
+    if(i< currentStep)  c+=' done';
+    if(i===currentStep) c+=' current';
+    return `<div class="${c}"></div>`;
+  }).join('');
+}
+
+function toggleAuto() {
+  const btn=document.getElementById('btnAuto');
+  if(autoTimer){
+    clearInterval(autoTimer);autoTimer=null;
+    btn.textContent='▶ Auto Play';btn.classList.remove('running');
+  } else {
+    btn.textContent='⏸ Pause';btn.classList.add('running');
+    autoTimer=setInterval(()=>{
+      if(currentStep>=STEPS.length-1){toggleAuto();return;}
+      nextStep();
+    },3500);
+  }
+}
+
+// ── INIT ──────────────────────────────────────────────────────────────────────
+window.addEventListener('resize',resize);
+resize();
+seedNodes();
+initOpacities();
+setTargets(0);
+updateUI();
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>
